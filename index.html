@@ -1,0 +1,937 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SunFollow 3D</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: vue 3D à gauche (grande), mesures en direct à droite, schéma / code / pièces en onglets dessous.
+   Palette: vert-gris d'atelier, ambre solaire, bleu-vert Arduino. */
+:root{
+  --bg:#eceee9; --surface:#f8f8f4; --surface2:#e2e6de; --ink:#1d2622; --muted:#5b685f; --line:#cdd3ca;
+  --amber:#c97d00; --amber-soft:#f4dfb0; --teal:#00747c; --good:#2a8647; --warn:#c1531a;
+  --code-bg:#1d2723; --code-ink:#dde7e0; --code-dim:#7f8f86; --code-hi:#3a4a2c; --code-hi-edge:#9fd25c;
+  --f-head:'Barlow Semi Condensed','Arial Narrow',system-ui,sans-serif;
+  --f-body:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --f-mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#101513; --surface:#18201d; --surface2:#222c28; --ink:#e4ebe6; --muted:#9aa8a0; --line:#2c3833;
+    --amber:#f2b33d; --amber-soft:#4a3a16; --teal:#38b8bf; --good:#5fc27f; --warn:#f08a54;
+    --code-bg:#0d1210; --code-hi:#2c3d20; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#101513; --surface:#18201d; --surface2:#222c28; --ink:#e4ebe6; --muted:#9aa8a0; --line:#2c3833;
+  --amber:#f2b33d; --amber-soft:#4a3a16; --teal:#38b8bf; --good:#5fc27f; --warn:#f08a54;
+  --code-bg:#0d1210; --code-hi:#2c3d20; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--f-body); font-size:15px; line-height:1.45;
+  padding-block:20px 40px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1,h2,h3{font-family:var(--f-head);margin:0;letter-spacing:.01em;text-wrap:balance}
+h1{font-size:34px;line-height:1;font-weight:700}
+h2{font-size:19px;font-weight:600}
+h3{font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.top{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px}
+.top p{margin:0;color:var(--muted)}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+@media (max-width:980px){.grid{grid-template-columns:minmax(0,1fr)}}
+.col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+
+/* viewport */
+.viewport{position:relative;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#9fc6e6;height:clamp(340px,56vw,600px)}
+#c{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#tags{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.tag{position:absolute;left:0;top:0;pointer-events:auto;cursor:pointer;border:0;padding:3px 8px 3px 6px;border-radius:3px;
+  font:500 12px/1.2 var(--f-body);background:rgba(20,28,24,.82);color:#f3f6f2;white-space:nowrap;display:flex;align-items:center;gap:6px;
+  will-change:transform}
+.tag::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--amber);flex:none;box-shadow:0 0 0 2px rgba(255,255,255,.35)}
+.tag[aria-pressed="true"]{background:var(--amber);color:#17140a}
+.tag[aria-pressed="true"]::before{background:#17140a;box-shadow:0 0 0 2px rgba(0,0,0,.25)}
+.vp-chip{position:absolute;left:10px;top:10px;display:flex;gap:6px;flex-wrap:wrap;pointer-events:none}
+.vp-chip span{background:rgba(20,28,24,.78);color:#f3f6f2;border-radius:3px;padding:3px 8px;font:500 12px/1.3 var(--f-mono)}
+.cams{position:absolute;right:10px;top:10px;display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;max-width:60%}
+.cams button{font:500 12px var(--f-body);background:rgba(248,248,244,.92);color:#1d2622;border:0;border-radius:3px;padding:4px 9px;cursor:pointer}
+.cams button:hover{background:#fff}
+.vp-help{position:absolute;left:10px;bottom:8px;font:400 11px var(--f-body);color:rgba(255,255,255,.88);text-shadow:0 1px 2px rgba(0,0,0,.6);pointer-events:none}
+.nogl{position:absolute;inset:0;display:none;align-items:center;justify-content:center;text-align:center;padding:24px;background:var(--surface);color:var(--ink)}
+
+/* time bar */
+.timebar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
+.timebar .slider{flex:1 1 220px;min-width:0}
+button.btn,select.btn{font:500 14px var(--f-body);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:6px 12px;cursor:pointer}
+button.btn:hover,select.btn:hover{border-color:var(--muted)}
+button.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+button:focus-visible,select:focus-visible,input:focus-visible,.tag:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+input[type=range]{width:100%;accent-color:var(--amber);margin:0}
+.clock{font:500 22px var(--f-mono);min-width:3.4ch}
+
+/* info card */
+.info{border-left:4px solid var(--amber);background:var(--surface);border-top:1px solid var(--line);border-right:1px solid var(--line);border-bottom:1px solid var(--line);border-radius:0 6px 6px 0;padding:12px 16px;min-height:78px}
+.info h2{margin-bottom:4px}
+.info p{margin:0;color:var(--ink);max-width:70ch}
+
+/* live */
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.lab{color:var(--muted);font-size:13px}
+.val{font:500 15px var(--f-mono);font-variant-numeric:tabular-nums}
+.bar{height:10px;background:var(--surface2);border-radius:2px;position:relative;overflow:hidden}
+.bar>i{position:absolute;left:0;top:0;bottom:0;background:var(--teal);width:0}
+.bar.amber>i{background:var(--amber)}
+.bar.good>i{background:var(--good)}
+.bar.grey>i{background:var(--muted)}
+.diff{height:16px;background:var(--surface2);border-radius:2px;position:relative}
+.diff .zone{position:absolute;top:0;bottom:0;background:var(--amber-soft);border-left:1px solid var(--amber);border-right:1px solid var(--amber)}
+.diff .mid{position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--muted)}
+.diff .need{position:absolute;top:-3px;bottom:-3px;width:4px;margin-left:-2px;background:var(--ink);border-radius:1px}
+.status{padding:8px 10px;border-radius:4px;background:var(--surface2);font-weight:500;min-height:3.2em}
+.status.move{background:var(--amber-soft)}
+.gauge{width:100%;max-width:260px;margin:0 auto;display:block}
+.gauge text{font:500 10px var(--f-mono);fill:var(--muted)}
+.gauge .big{font:600 20px var(--f-mono);fill:var(--ink)}
+.kv{display:grid;grid-template-columns:1fr auto;gap:4px 10px}
+
+/* settings */
+.set{display:flex;flex-direction:column;gap:4px}
+.set label{display:flex;justify-content:space-between;gap:10px;font-size:13px;color:var(--muted)}
+.set label b{font:500 13px var(--f-mono);color:var(--ink)}
+.set select{width:100%}
+.chk{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.chk input{margin-top:3px;accent-color:var(--amber)}
+.hint{font-size:12px;color:var(--muted);margin:0}
+
+/* tabs */
+.tabs{display:flex;flex-direction:column;gap:0}
+.tablist{display:flex;gap:2px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+.tablist button{font:600 15px var(--f-head);letter-spacing:.02em;background:transparent;color:var(--muted);border:1px solid transparent;border-bottom:0;padding:9px 16px;cursor:pointer;border-radius:5px 5px 0 0}
+.tablist button[aria-selected="true"]{background:var(--surface);color:var(--ink);border-color:var(--line);margin-bottom:-1px;border-bottom:1px solid var(--surface)}
+.tabpanel{background:var(--surface);border:1px solid var(--line);border-top:0;padding:16px;border-radius:0 0 6px 6px;min-width:0}
+.scroll-x{overflow-x:auto}
+svg.schem{min-width:760px;width:100%;height:auto;display:block}
+svg.schem text{font:500 12px var(--f-body);fill:var(--ink)}
+svg.schem .t2{fill:var(--muted);font-size:11px}
+svg.schem .ln{stroke:var(--ink);stroke-width:2;fill:none;stroke-linejoin:round}
+svg.schem .box{fill:var(--surface2);stroke:var(--ink);stroke-width:2}
+svg.schem .dot{fill:var(--ink)}
+pre.code{margin:0;background:var(--code-bg);color:var(--code-ink);border-radius:6px;padding:14px 0;overflow-x:auto;font:400 13px/1.55 var(--f-mono)}
+pre.code .l{display:block;padding:0 16px 0 14px;border-left:3px solid transparent;white-space:pre}
+pre.code .l.on{background:var(--code-hi);border-left-color:var(--code-hi-edge)}
+pre.code .c{color:var(--code-dim)}
+table.parts{border-collapse:collapse;width:100%;min-width:560px}
+table.parts th,table.parts td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+table.parts th{font:600 12px var(--f-head);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+table.parts td:last-child{text-align:right;font-family:var(--f-mono)}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media (max-width:760px){.two{grid-template-columns:minmax(0,1fr)}}
+.cap{margin:10px 0 0;color:var(--muted);max-width:80ch}
+.note{margin:0;font-size:13px;color:var(--muted)}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto!important}}
+body{margin:0}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <h1>SunFollow</h1>
+    <p>Simulation 3D de la maquette : un panneau solaire qui suit le soleil, piloté par une Arduino UNO.</p>
+  </header>
+
+  <div class="grid">
+    <div class="col">
+      <div class="viewport" id="viewport">
+        <canvas id="c" aria-label="Maquette SunFollow en 3D"></canvas>
+        <div id="tags"></div>
+        <div class="vp-chip"><span id="chipTime">09:30</span><span id="chipSun">Soleil 0°</span><span id="chipWx">Ciel clair</span></div>
+        <div class="cams" role="group" aria-label="Points de vue">
+          <button type="button" data-cam="iso">Vue 3/4</button>
+          <button type="button" data-cam="cote">Côté</button>
+          <button type="button" data-cam="face">Face</button>
+          <button type="button" data-cam="dessus">Dessus</button>
+        </div>
+        <div class="vp-help">Glisser pour tourner, molette ou pincement pour zoomer. Clique sur une étiquette pour voir le rôle de la pièce.</div>
+        <div class="nogl" id="nogl"><div><h2>La 3D ne peut pas s'afficher ici</h2><p>Ton navigateur bloque WebGL. Les mesures, le schéma et le programme restent disponibles plus bas.</p></div></div>
+      </div>
+
+      <div class="timebar">
+        <button type="button" class="btn primary" id="play" aria-pressed="true">Pause</button>
+        <div class="clock" id="clock">09:30</div>
+        <div class="slider"><input type="range" id="time" min="0" max="24" step="0.01" value="9.5" aria-label="Heure de la journée"></div>
+        <select class="btn" id="speed" aria-label="Vitesse de la journée">
+          <option value="1">Vitesse ×1</option><option value="2">Vitesse ×2</option><option value="4">Vitesse ×4</option>
+        </select>
+      </div>
+
+      <div class="info" id="info" aria-live="polite">
+        <h2 id="infoT">Comment lire la simulation</h2>
+        <p id="infoD">Le soleil fait un arc dans le ciel de 6 h à 18 h. Les deux capteurs de lumière lisent ce qu'ils reçoivent, l'Arduino compare, et le servomoteur tourne le panneau jusqu'à ce que les deux voient la même chose. Déplace l'heure pour le tester.</p>
+      </div>
+    </div>
+
+    <aside class="col">
+      <section class="card" aria-labelledby="hLive">
+        <h3 id="hLive">Mesures en direct</h3>
+        <svg class="gauge" viewBox="0 0 200 118" role="img" aria-label="Angle du servomoteur">
+          <path id="gArc" d="M20 100 A80 80 0 0 1 180 100" fill="none" stroke="var(--surface2)" stroke-width="12" stroke-linecap="butt"/>
+          <path id="gOk" fill="none" stroke="var(--teal)" stroke-width="12" opacity=".45"/>
+          <g id="gTicks"></g>
+          <circle id="gSun" r="6" fill="var(--amber)" stroke="var(--surface)" stroke-width="2"/>
+          <line id="gNeedle" x1="100" y1="100" x2="100" y2="30" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="100" cy="100" r="6" fill="var(--ink)"/>
+          <text id="gVal" class="big" x="100" y="86" text-anchor="middle" style="display:none"></text>
+          <text x="20" y="116" text-anchor="middle">0°</text><text x="100" y="116" text-anchor="middle">90°</text><text x="180" y="116" text-anchor="middle">180°</text>
+        </svg>
+        <div class="row"><span class="lab">Angle du servomoteur</span><span class="val" id="vAngle">90°</span></div>
+        <div class="row"><span class="lab">Position du soleil (point ambre)</span><span class="val" id="vSun">0°</span></div>
+
+        <div class="set"><div class="row"><span class="lab">Capteur haut (A0)</span><span class="val" id="vTop">0</span></div><div class="bar amber"><i id="bTop"></i></div></div>
+        <div class="set"><div class="row"><span class="lab">Capteur bas (A1)</span><span class="val" id="vBot">0</span></div><div class="bar"><i id="bBot"></i></div></div>
+        <div class="set">
+          <div class="row"><span class="lab">Différence haut − bas</span><span class="val" id="vDiff">0</span></div>
+          <div class="diff"><div class="zone" id="zone"></div><div class="mid"></div><div class="need" id="need"></div></div>
+          <p class="hint">La zone ambre est la zone morte : dedans, le panneau ne bouge pas.</p>
+        </div>
+        <div class="status" id="status">…</div>
+
+        <div class="kv">
+          <span class="lab">Écart panneau / soleil</span><span class="val" id="vErr">0°</span>
+          <span class="lab">Lumière utile captée</span><span class="val" id="vEff">0 %</span>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="hDay">
+        <h3 id="hDay">Journée simulée</h3>
+        <div class="set"><div class="row"><span class="lab">SunFollow (panneau mobile)</span><span class="val" id="vET">0</span></div><div class="bar good"><i id="bET"></i></div></div>
+        <div class="set"><div class="row"><span class="lab">Panneau fixe à plat</span><span class="val" id="vEF">0</span></div><div class="bar grey"><i id="bEF"></i></div></div>
+        <div class="row"><span class="lab">Gain du suivi</span><span class="val" id="vGain">–</span></div>
+        <p class="hint">Valeurs théoriques d'un modèle simplifié (ciel sans atmosphère, un seul axe). Elles servent à comparer les deux panneaux, pas à prévoir une production réelle.</p>
+        <button type="button" class="btn" id="resetE">Remettre à zéro</button>
+      </section>
+
+      <section class="card" aria-labelledby="hSet">
+        <h3 id="hSet">Réglages et essais</h3>
+        <div class="set"><label for="weather">Météo</label>
+          <select class="btn" id="weather"><option value="clair">Ciel clair</option><option value="nuageux">Nuageux</option><option value="pluie">Pluie</option></select></div>
+        <div class="set"><label for="shade">Ombre sur un capteur</label>
+          <select class="btn" id="shade"><option value="none">Aucune</option><option value="top">Sur le capteur haut</option><option value="bot">Sur le capteur bas</option></select></div>
+        <div class="set"><label for="tol">Zone morte <b id="tolV">40</b></label><input type="range" id="tol" min="5" max="150" step="1" value="40"></div>
+        <div class="set"><label for="fin">Hauteur de la cloison <b id="finV">5,0 cm</b></label><input type="range" id="fin" min="1" max="6" step="0.5" value="5"></div>
+        <div class="set"><label for="wind">Vent <b id="windV">10 km/h</b></label><input type="range" id="wind" min="0" max="80" step="1" value="10"></div>
+        <label class="chk"><input type="checkbox" id="windSafe"><span>Retour à plat si vent &gt; 40 km/h <span class="hint">(option : demande un anémomètre en plus)</span></span></label>
+        <label class="chk"><input type="checkbox" id="optTags" checked><span>Étiquettes des pièces</span></label>
+        <label class="chk"><input type="checkbox" id="optRays" checked><span>Rayon du soleil et direction du panneau</span></label>
+        <label class="chk"><input type="checkbox" id="optPath" checked><span>Trajet du soleil</span></label>
+      </section>
+    </aside>
+  </div>
+
+  <section class="tabs" aria-label="Détails techniques">
+    <div class="tablist" role="tablist">
+      <button role="tab" id="tab1" aria-controls="p1" aria-selected="true" type="button">Schéma électrique</button>
+      <button role="tab" id="tab2" aria-controls="p2" aria-selected="false" type="button">Programme Arduino</button>
+      <button role="tab" id="tab3" aria-controls="p3" aria-selected="false" type="button">Pièces et rôles</button>
+    </div>
+
+    <div class="tabpanel" id="p1" role="tabpanel" aria-labelledby="tab1">
+      <div class="scroll-x">
+      <svg class="schem" viewBox="0 0 860 380" role="img" aria-label="Schéma électrique : deux ponts diviseurs vers A0 et A1, servomoteur sur D9 avec alimentation séparée">
+        <!-- rails -->
+        <line class="ln" x1="90" y1="50" x2="360" y2="50" stroke="#d33"/>
+        <text x="90" y="40" style="fill:#d33">+5 V</text>
+        <line class="ln" x1="90" y1="330" x2="360" y2="330" />
+        <text x="90" y="348">GND</text>
+
+        <!-- branche bas (proche) x=250 -->
+        <line class="ln" x1="250" y1="50" x2="250" y2="85"/>
+        <rect class="box" x="232" y="85" width="36" height="56" rx="3"/>
+        <text x="250" y="109" text-anchor="middle">LDR</text><text x="250" y="124" text-anchor="middle" class="t2">bas</text>
+        <line class="ln" x1="250" y1="141" x2="250" y2="215"/>
+        <circle class="dot" cx="250" cy="215" r="4"/>
+        <line class="ln" x1="250" y1="215" x2="250" y2="240"/>
+        <rect class="box" x="236" y="240" width="28" height="48" rx="3"/>
+        <text x="250" y="262" text-anchor="middle" class="t2">10</text><text x="250" y="276" text-anchor="middle" class="t2">kΩ</text>
+        <line class="ln" x1="250" y1="288" x2="250" y2="330"/>
+        <path class="ln" d="M250 215 H 360"/>
+
+        <!-- branche haut (loin) x=130 -->
+        <line class="ln" x1="130" y1="50" x2="130" y2="85"/>
+        <rect class="box" x="112" y="85" width="36" height="56" rx="3"/>
+        <text x="130" y="109" text-anchor="middle">LDR</text><text x="130" y="124" text-anchor="middle" class="t2">haut</text>
+        <line class="ln" x1="130" y1="141" x2="130" y2="170"/>
+        <circle class="dot" cx="130" cy="170" r="4"/>
+        <line class="ln" x1="130" y1="170" x2="130" y2="240"/>
+        <rect class="box" x="116" y="240" width="28" height="48" rx="3"/>
+        <text x="130" y="262" text-anchor="middle" class="t2">10</text><text x="130" y="276" text-anchor="middle" class="t2">kΩ</text>
+        <line class="ln" x1="130" y1="288" x2="130" y2="330"/>
+        <path class="ln" d="M130 170 H 244 a6 6 0 0 1 12 0 H 360"/>
+
+        <!-- Arduino -->
+        <rect class="box" x="360" y="30" width="170" height="320" rx="6" style="fill:var(--surface2)"/>
+        <text x="445" y="200" text-anchor="middle" style="font-weight:600;font-size:15px">Arduino UNO</text>
+        <text x="445" y="218" text-anchor="middle" class="t2">ATmega328P</text>
+        <text x="368" y="54">5V</text><text x="368" y="174">A0</text><text x="368" y="219">A1</text><text x="368" y="334">GND</text>
+        <text x="522" y="104" text-anchor="end">D9 (PWM)</text><text x="522" y="334" text-anchor="end">GND</text>
+
+        <!-- servo -->
+        <rect class="box" x="620" y="30" width="170" height="100" rx="6"/>
+        <text x="705" y="68" text-anchor="middle" style="font-weight:600;font-size:15px">Servomoteur</text>
+        <text x="705" y="88" text-anchor="middle" class="t2">tourne le panneau</text>
+        <text x="650" y="122" text-anchor="middle" class="t2">signal</text><text x="700" y="122" text-anchor="middle" class="t2">+5 V</text><text x="750" y="122" text-anchor="middle" class="t2">GND</text>
+        <path class="ln" d="M530 100 H 580 V 175 H 650 V 130" stroke="#e8862a"/>
+        <line class="ln" x1="700" y1="130" x2="700" y2="250" stroke="#d33"/>
+        <line class="ln" x1="750" y1="130" x2="750" y2="250" stroke="#8a5a3c"/>
+
+        <!-- alimentation -->
+        <rect class="box" x="640" y="250" width="160" height="70" rx="6"/>
+        <text x="720" y="280" text-anchor="middle" style="font-weight:600">Alimentation 5 V</text>
+        <text x="720" y="298" text-anchor="middle" class="t2">séparée, pour le servo</text>
+        <text x="692" y="246" text-anchor="end" class="t2">+</text><text x="758" y="246" class="t2">−</text>
+
+        <!-- masse commune -->
+        <path class="ln" d="M530 330 H 580 V 215 H 694 a6 6 0 0 1 12 0 H 750"/>
+        <circle class="dot" cx="750" cy="215" r="4"/>
+        <text x="587" y="268" class="t2">masse</text>
+        <text x="587" y="283" class="t2">commune</text>
+
+        <!-- légende -->
+        <text x="90" y="372" class="t2">Tension lue = 5 V × 10 kΩ ÷ (R_LDR + 10 kΩ). Plus il y a de lumière, plus R_LDR baisse et plus la tension monte.</text>
+      </svg>
+      </div>
+      <p class="cap">Le servomoteur prend son courant sur son propre bloc 5 V. Les deux masses (GND) sont reliées pour que le signal D9 ait la même référence que le servo.</p>
+    </div>
+
+    <div class="tabpanel" id="p2" role="tabpanel" aria-labelledby="tab2" hidden>
+      <div class="two">
+        <pre class="code" id="code" aria-label="Programme Arduino"></pre>
+        <div style="display:flex;flex-direction:column;gap:10px;min-width:0">
+          <h2>Ce que fait le programme</h2>
+          <p style="margin:0">La ligne verte est celle qui s'exécute en ce moment dans la simulation. Le programme se répète toutes les 30 ms.</p>
+          <p style="margin:0"><b>Zone morte :</b> si la différence entre les deux capteurs est petite, le panneau ne bouge pas. Sans ça, il tremblerait en permanence autour de la bonne position.</p>
+          <p style="margin:0"><b>Butées :</b> <span class="mono">constrain(angle, 10, 170)</span> empêche le servomoteur de forcer en bout de course.</p>
+          <p style="margin:0"><b>Nuit :</b> si les deux capteurs reçoivent très peu de lumière, le panneau revient à plat (90°) et attend le matin.</p>
+          <p class="note">Le retour à plat par grand vent n'est pas dans ce programme. Il demande un capteur de vent en plus.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabpanel" id="p3" role="tabpanel" aria-labelledby="tab3" hidden>
+      <div class="scroll-x">
+      <table class="parts">
+        <thead><tr><th>Pièce</th><th>Rôle dans le projet</th><th>Qté</th></tr></thead>
+        <tbody>
+          <tr><td>Carte Arduino UNO</td><td>Cerveau : lit les deux capteurs et commande le servomoteur</td><td>1</td></tr>
+          <tr><td>Photorésistance (LDR)</td><td>Mesure la lumière reçue, une en haut et une en bas du panneau</td><td>2</td></tr>
+          <tr><td>Résistance 10 kΩ</td><td>Forme le pont diviseur avec chaque LDR</td><td>2</td></tr>
+          <tr><td>Servomoteur</td><td>Fait tourner le panneau autour de son axe, de 0 à 180°</td><td>1</td></tr>
+          <tr><td>Mini panneau solaire</td><td>Pièce qui doit rester face au soleil</td><td>1</td></tr>
+          <tr><td>Cloison noire</td><td>Fait de l'ombre sur le capteur opposé au soleil</td><td>1</td></tr>
+          <tr><td>Alimentation 5 V</td><td>Alimente le servomoteur à part de la carte</td><td>1</td></tr>
+          <tr><td>Plaque d'essai et fils</td><td>Relie les capteurs, les résistances et la carte</td><td>1</td></tr>
+          <tr><td>Boîtier étanche, passe-câbles, silicone</td><td>Protège l'électronique de la pluie et de l'humidité</td><td>1</td></tr>
+          <tr><td>Base, montants et axe</td><td>Structure qui porte et guide le panneau</td><td>1</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+'use strict';
+var $=function(id){return document.getElementById(id)};
+var RAD=Math.PI/180;
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function smooth(a,b,x){var t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t)}
+function fmt1(n){return n.toFixed(1).replace('.',',')}
+function pad(n){return (n<10?'0':'')+n}
+
+/* ---------- état ---------- */
+var reduced=false;
+try{reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){}
+var S={t:9.5,playing:!reduced,speed:1,angle:90,tol:40,fin:5,weather:'clair',shade:'none',wind:10,windSafe:false,
+  tags:true,rays:true,path:true,top:0,bot:0,act:'ok',eT:0,eF:0,acc:0,sel:null,lastAngle:-1,hudT:0};
+var WX={clair:{dr:1,df:0.08,sky:0,label:'Ciel clair'},nuageux:{dr:0.15,df:0.25,sky:0.5,label:'Nuageux'},pluie:{dr:0.06,df:0.18,sky:0.65,label:'Pluie'}};
+var AX=12; /* hauteur de l'axe en cm */
+
+/* ---------- physique simplifiée ---------- */
+function sunPhi(){return (S.t-6)/12*Math.PI}
+function daylight(){return smooth(0,0.3,Math.sin(sunPhi()))}
+function sensors(){
+  var phi=sunPhi(), psi=S.angle*RAD, del=phi-psi, w=WX[S.weather], L=daylight();
+  var c=Math.max(0,Math.cos(del));
+  var sh=S.fin*Math.tan(Math.min(Math.abs(del),1.48));
+  var f=c>0?clamp((sh-(1.0-0.25-0.07))/0.5,0,1):0;
+  var fTop=del<0?f:0, fBot=del>0?f:0;
+  var top=900*L*(w.dr*c*(1-fTop)+w.df), bot=900*L*(w.dr*c*(1-fBot)+w.df);
+  if(S.shade==='top')top*=0.2;
+  if(S.shade==='bot')bot*=0.2;
+  top+= (Math.random()-0.5)*5; bot+=(Math.random()-0.5)*5;
+  return {top:clamp(Math.round(top),0,1023),bot:clamp(Math.round(bot),0,1023)};
+}
+function power(psi){
+  var del=sunPhi()-psi*RAD, w=WX[S.weather];
+  return daylight()*(w.dr*Math.max(0,Math.cos(del))+w.df*0.5)/1.04;
+}
+function tick(){
+  var s=sensors(); S.top=s.top; S.bot=s.bot;
+  var diff=s.top-s.bot, windRest=S.windSafe&&S.wind>40;
+  if(windRest||s.top+s.bot<100){
+    S.act=windRest?'vent':'nuit';
+    if(S.angle<90)S.angle++; else if(S.angle>90)S.angle--;
+  }else if(diff>S.tol){S.angle++;S.act='plus'}
+  else if(diff<-S.tol){S.angle--;S.act='moins'}
+  else S.act='ok';
+  S.angle=clamp(S.angle,10,170);
+}
+
+/* ---------- pièces (étiquettes et descriptions) ---------- */
+var PARTS={
+ panneau:{t:'Mini panneau solaire',d:"Il capte la lumière. Il est fixé sur un axe horizontal et bascule d'avant en arrière quand le servomoteur tourne. Le soleil change de place dans la journée, c'est pour ça que le panneau doit bouger."},
+ haut:{t:'Capteur haut (photorésistance)',d:"Plus il reçoit de lumière, moins sa résistance est grande. Avec une résistance de 10 kΩ en série, il donne une tension que l'Arduino lit sur A0, sous forme d'un nombre de 0 à 1023."},
+ bas:{t:'Capteur bas (photorésistance)',d:"Même pièce que le capteur haut, de l'autre côté de la cloison. L'Arduino le lit sur A1. Quand A0 et A1 sont égaux, le panneau est face au soleil."},
+ cloison:{t:'Cloison noire',d:"Petite plaque entre les deux capteurs. Quand le soleil n'est pas en face, elle fait de l'ombre sur le capteur du côté opposé : c'est cette ombre qui crée une différence entre A0 et A1. Plus la cloison est haute, plus le panneau est précis (essaie le curseur)."},
+ axe:{t:"Axe de rotation",d:"Tige métallique qui traverse le panneau et les deux montants. Le servomoteur la fait tourner, et le panneau avec."},
+ servo:{t:'Servomoteur',d:"Il tourne de 0 à 180° et reste à l'angle demandé. L'Arduino lui envoie un signal PWM sur la broche D9. Il a son propre bloc 5 V pour ne pas faire chuter la tension de la carte quand il force."},
+ montants:{t:'Montants et base',d:"Deux montants tiennent l'axe. La base est assez lourde pour garder la maquette stable, y compris quand il y a du vent."},
+ boitier:{t:'Boîtier étanche',d:"Il protège l'électronique de la pluie et de l'humidité. Les câbles entrent par des passe-câbles fermés avec du silicone. C'est une protection simple et peu chère."},
+ arduino:{t:'Carte Arduino UNO',d:"Le cerveau du projet. Son microcontrôleur ATmega328P lit A0 et A1 toutes les 30 ms, compare les deux valeurs et commande le servomoteur sur D9. Elle est alimentée par son câble USB."},
+ plaque:{t:"Plaque d'essai et résistances",d:"Elle porte les deux ponts diviseurs : chaque photorésistance est en série avec une résistance de 10 kΩ, et le point du milieu va vers A0 ou A1."},
+ alim:{t:'Alimentation 5 V du servo',d:"Elle alimente le servomoteur à part. Son GND est relié au GND de l'Arduino (masse commune), sinon le signal D9 n'aurait pas de référence."},
+ cables:{t:'Câbles des capteurs',d:"Ils partent du panneau côté montant et gardent assez de jeu pour que le panneau tourne sans tirer dessus."}
+};
+var DEFAULT_INFO={t:'Comment lire la simulation',d:$('infoD').textContent};
+
+/* ---------- 3D ---------- */
+var renderer=null,scene,camera,controls,panelGroup,wires=[],labelDefs=[],tagEls={};
+var sunMesh,sunGlow,sunLight,hemi,pathLine,rayLine,normalArrow,rain,rainPos,finMesh,ldrTop,ldrBot,tableMesh;
+var rainN=500;
+
+function init3D(){
+  try{
+    renderer=new THREE.WebGLRenderer({canvas:$('c'),antialias:true});
+  }catch(e){renderer=null}
+  if(!renderer||typeof THREE==='undefined'){$('nogl').style.display='flex';renderer=null;return}
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  renderer.shadowMap.enabled=true;
+  renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color('#a9d0ee');
+  scene.fog=new THREE.Fog('#a9d0ee',170,420);
+  camera=new THREE.PerspectiveCamera(38,1.6,0.5,700);
+  camera.position.set(40,25,50);
+  controls=new THREE.OrbitControls(camera,$('c'));
+  controls.target.set(-1,9,3);
+  controls.enableDamping=true; controls.dampingFactor=0.08;
+  controls.minDistance=18; controls.maxDistance=150; controls.maxPolarAngle=Math.PI*0.495;
+  controls.update();
+
+  hemi=new THREE.HemisphereLight(0xcfe6ff,0x6b5a45,0.7); scene.add(hemi);
+  sunLight=new THREE.DirectionalLight(0xfff1d6,1.6);
+  sunLight.castShadow=true;
+  sunLight.shadow.mapSize.set(2048,2048);
+  var sc=sunLight.shadow.camera; sc.left=-28; sc.right=28; sc.top=28; sc.bottom=-28; sc.near=5; sc.far=200;
+  sunLight.shadow.bias=-0.0004; sunLight.shadow.normalBias=0.03;
+  sunLight.target.position.set(0,AX,0);
+  scene.add(sunLight); scene.add(sunLight.target);
+
+  buildScene();
+  buildSun();
+  buildRain();
+  buildLabels();
+  resize();
+}
+
+function M(color,o){o=o||{};return new THREE.MeshStandardMaterial(Object.assign({color:color,roughness:0.7,metalness:0},o))}
+function box(w,h,d,mat,x,y,z,parent){
+  var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  m.position.set(x||0,y||0,z||0); m.castShadow=true; m.receiveShadow=true;
+  if(parent)parent.add(m); return m;
+}
+function cyl(r,h,mat,x,y,z,parent,rotZ,seg){
+  var g=new THREE.CylinderGeometry(r,r,h,seg||24);
+  if(rotZ)g.rotateZ(Math.PI/2);
+  var m=new THREE.Mesh(g,mat); m.position.set(x||0,y||0,z||0); m.castShadow=true; m.receiveShadow=true;
+  if(parent)parent.add(m); return m;
+}
+function V(x,y,z){return new THREE.Vector3(x,y,z)}
+function tube(pts,color,r){
+  var curve=new THREE.CatmullRomCurve3(pts);
+  var m=new THREE.Mesh(new THREE.TubeGeometry(curve,Math.max(12,pts.length*10),r||0.08,6,false),new THREE.MeshStandardMaterial({color:color,roughness:0.55}));
+  m.castShadow=true; scene.add(m); return m;
+}
+function canvasTex(w,h,draw){
+  var cv=document.createElement('canvas'); cv.width=w; cv.height=h; draw(cv.getContext('2d'),w,h);
+  var t=new THREE.CanvasTexture(cv); if(renderer&&renderer.capabilities)t.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy()); return t;
+}
+function textPlane(txt,w,h,fg,px){
+  var tex=canvasTex(256,Math.round(256*h/w),function(x,W,H){x.fillStyle=fg;x.font='700 '+px+'px Arial, sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText(txt,W/2,H/2)});
+  var m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:tex,transparent:true}));
+  m.rotation.x=-Math.PI/2; return m;
+}
+
+function buildScene(){
+  /* table et base */
+  tableMesh=new THREE.Mesh(new THREE.CircleGeometry(260,64),M(0xb7a68a,{roughness:0.95}));
+  tableMesh.rotation.x=-Math.PI/2; tableMesh.receiveShadow=true; scene.add(tableMesh);
+  var wood=M(0xa9794a,{roughness:0.85}), wood2=M(0xcfa575,{roughness:0.8});
+  box(42,1.6,30,wood,0,0.8,0,scene);
+  box(0.8,11.9,3,wood2,-8.3,7.55,0,scene);
+  box(0.8,11.9,3,wood2,8.3,7.55,0,scene);
+  box(3.2,0.3,3.6,wood2,-8.3,1.75,0,scene);
+  box(3.2,0.3,3.6,wood2,8.3,1.75,0,scene);
+
+  /* groupe panneau (pivote autour de l'axe X à y=AX) */
+  panelGroup=new THREE.Group(); panelGroup.position.set(0,AX,0); scene.add(panelGroup);
+  var silver=M(0xbfc5cc,{metalness:0.75,roughness:0.35});
+  cyl(0.2,17.9,silver,-0.25,0,0,panelGroup,true,20);
+  box(14.4,0.5,11.4,M(0xaab1b9,{metalness:0.7,roughness:0.4}),0,0.55,0,panelGroup);
+  box(0.6,0.9,2.4,M(0x3a3f45),-3,0.1,0,panelGroup);
+  box(0.6,0.9,2.4,M(0x3a3f45),3,0.1,0,panelGroup);
+  cyl(0.45,0.65,M(0xf1f1ee),7.55,0,0,panelGroup,true,20);
+  var pTex=canvasTex(1024,800,function(x,W,H){
+    x.fillStyle='#0b2154'; x.fillRect(0,0,W,H);
+    var cols=10,rows=8,m=22,gw=(W-2*m)/cols,gh=(H-2*m)/rows;
+    for(var i=0;i<cols;i++)for(var j=0;j<rows;j++){
+      var x0=m+i*gw+3,y0=m+j*gh+3,w=gw-6,h=gh-6;
+      var g=x.createLinearGradient(x0,y0,x0+w,y0+h); g.addColorStop(0,'#2058a8'); g.addColorStop(1,'#123a78');
+      x.fillStyle=g; x.fillRect(x0,y0,w,h);
+      x.strokeStyle='rgba(190,205,230,.55)'; x.lineWidth=1.5;
+      for(var k=1;k<=3;k++){var xx=x0+w*k/4; x.beginPath(); x.moveTo(xx,y0); x.lineTo(xx,y0+h); x.stroke()}
+    }
+    var sh=x.createLinearGradient(0,0,W,H); sh.addColorStop(0,'rgba(255,255,255,.16)'); sh.addColorStop(.5,'rgba(255,255,255,0)'); sh.addColorStop(1,'rgba(255,255,255,.06)');
+    x.fillStyle=sh; x.fillRect(0,0,W,H);
+  });
+  var glass=new THREE.Mesh(new THREE.PlaneGeometry(14,11),new THREE.MeshStandardMaterial({map:pTex,roughness:0.3,metalness:0.1}));
+  glass.rotation.x=-Math.PI/2; glass.position.set(0,0.81,0); glass.receiveShadow=true; panelGroup.add(glass);
+
+  /* cloison */
+  var fg=new THREE.BoxGeometry(3.2,1,0.14); fg.translate(0,0.5,0);
+  finMesh=new THREE.Mesh(fg,M(0x161616,{roughness:0.9})); finMesh.position.set(0,0.81,0);
+  finMesh.castShadow=true; finMesh.scale.y=S.fin; panelGroup.add(finMesh);
+
+  /* capteurs */
+  var ldrTexture=canvasTex(128,128,function(x,W,H){
+    x.fillStyle='#caa45a'; x.fillRect(0,0,W,H); x.strokeStyle='#5a3a1c'; x.lineWidth=9;
+    for(var i=0;i<5;i++){x.beginPath(); x.moveTo(14,22+i*22); x.lineTo(W-14,22+i*22); x.stroke()}
+    x.lineWidth=7; x.beginPath(); x.moveTo(14,22); x.lineTo(14,110); x.moveTo(W-14,22); x.lineTo(W-14,110); x.stroke();
+  });
+  function makeLDR(z,ring){
+    var g=new THREE.Group(); g.position.set(0,0.81,z); panelGroup.add(g);
+    var side=new THREE.MeshStandardMaterial({color:0xd7b66f,roughness:0.6});
+    var top=new THREE.MeshStandardMaterial({map:ldrTexture,roughness:0.5});
+    var c=new THREE.Mesh(new THREE.CylinderGeometry(0.25,0.25,0.18,28),[side,top,side]); c.position.y=0.09; c.castShadow=true; g.add(c);
+    cyl(0.33,0.05,M(ring),0,0.025,0,g,false,28);
+    cyl(0.025,0.5,silver,-0.1,-0.2,0,g,false,6); cyl(0.025,0.5,silver,0.1,-0.2,0,g,false,6);
+    return g;
+  }
+  ldrTop=makeLDR(1.0,0xe0a020);
+  ldrBot=makeLDR(-1.0,0x1f9aa3);
+
+  /* servomoteur */
+  var blue=M(0x2a5db0,{roughness:0.55});
+  box(2.27,1.2,2.3,blue,9.835,AX,0.6,scene);
+  box(0.3,1.2,3.3,blue,9.0,AX,0.6,scene);
+  box(0.1,0.7,1.2,M(0xf2f2ef),10.1,AX+0.62,0.6,scene);
+
+  /* boîtier étanche */
+  var glassMat=new THREE.MeshStandardMaterial({color:0xcfe7ff,transparent:true,opacity:0.16,roughness:0.1,depthWrite:false,side:THREE.DoubleSide});
+  var bx=new THREE.Mesh(new THREE.BoxGeometry(20,6,9),glassMat); bx.position.set(-8,4.6,8.5); scene.add(bx);
+  var edges=new THREE.LineSegments(new THREE.EdgesGeometry(bx.geometry),new THREE.LineBasicMaterial({color:0xe9f4ff,transparent:true,opacity:0.8}));
+  edges.position.copy(bx.position); scene.add(edges);
+  box(20.4,0.4,9.4,M(0xdfe6ea,{roughness:0.5}),-8,1.8,8.5,scene);
+  box(20.4,0.4,9.4,M(0xdfe6ea,{roughness:0.5}),-8,7.6,8.5,scene);
+  var gl=M(0x1a1a1a);
+  [[-3,5.2,4],[2,5.0,6.5],[2,4.2,9.8],[-18,3.6,7.2]].forEach(function(p,i){cyl(0.4,0.6,gl,p[0],p[1],p[2],scene,i>0&&i<3||i===3,12)});
+  var ls=M(0xd9dfe3);
+  box(0.6,0.6,0.6,ls,-17.5,2.4,5.1,scene); box(0.6,0.6,0.6,ls,1.5,2.4,5.1,scene);
+  box(0.6,0.6,0.6,ls,-17.5,2.4,11.9,scene); box(0.6,0.6,0.6,ls,1.5,2.4,11.9,scene);
+
+  /* Arduino UNO */
+  var ard=new THREE.Group(); ard.position.set(-13.5,2.55,8.5); scene.add(ard);
+  box(6.86,0.16,5.34,M(0x00858c,{roughness:0.55}),0,0,0,ard);
+  [[-3,-2],[3,-2],[-3,2],[3,2]].forEach(function(p){cyl(0.22,0.35,M(0xc9c9c9,{metalness:0.6}),p[0],-0.2,p[1],ard,false,10)});
+  box(1.2,1.1,1.6,M(0xc8ced4,{metalness:0.7,roughness:0.35}),-2.9,0.63,-1.0,ard);
+  box(1.0,0.9,0.9,M(0x141414),-3.0,0.53,1.7,ard);
+  var chip=box(3.4,0.32,0.9,M(0x121212),0.7,0.24,0.2,ard);
+  var cp=textPlane('ATMEGA328P',3.0,0.7,'#cfcfcf',44); cp.position.set(0.7,0.41,0.2); ard.add(cp);
+  box(4.6,0.5,0.25,M(0x151515),1.0,0.33,-2.4,ard);
+  box(2.0,0.5,0.25,M(0x151515),-0.6,0.33,2.4,ard);
+  box(1.6,0.5,0.25,M(0x151515),1.9,0.33,2.4,ard);
+  cyl(0.28,0.3,M(0xc01818),-1.9,0.23,-1.9,ard,false,12);
+  box(1.0,0.28,0.4,M(0xc4cbd1,{metalness:0.8,roughness:0.3}),-0.9,0.22,-1.0,ard);
+  box(0.3,0.12,0.2,M(0x44e060,{emissive:0x22aa40,emissiveIntensity:0.8}),2.4,0.14,-0.9,ard);
+  var uno=textPlane('UNO',2.2,0.8,'#f4f4f4',90); uno.position.set(1.2,0.1,-1.15); ard.add(uno);
+
+  /* plaque d'essai */
+  var bbTex=canvasTex(256,170,function(x,W,H){
+    x.fillStyle='#f1f1ec'; x.fillRect(0,0,W,H); x.fillStyle='#5b5f63';
+    for(var i=0;i<30;i++)for(var j=0;j<10;j++){ if(j===5)continue; x.fillRect(12+i*7.8,16+j*14+(j>5?10:0),3,3)}
+    x.fillStyle='#c9c9c3'; x.fillRect(0,H/2-4,W,8);
+  });
+  var bb=new THREE.Mesh(new THREE.BoxGeometry(8.2,0.85,5.5),[M(0xe9e9e3),M(0xe9e9e3),new THREE.MeshStandardMaterial({map:bbTex,roughness:0.6}),M(0xe9e9e3),M(0xe9e9e3),M(0xe9e9e3)]);
+  bb.material=[M(0xe9e9e3),M(0xe9e9e3),new THREE.MeshStandardMaterial({map:bbTex,roughness:0.6}),M(0xe9e9e3),M(0xe9e9e3),M(0xe9e9e3)];
+  bb.position.set(-4.5,2.43,8.8); bb.castShadow=true; bb.receiveShadow=true; scene.add(bb);
+  [-1.2,0.8].forEach(function(dx,i){
+    var r=cyl(0.17,1.6,M(0xd8c8a0),-4.5+dx,3.0,8.8+(i?0.8:-0.8),scene,false,10); r.rotation.z=Math.PI/2;
+    box(0.12,0.2,0.2,M(0x6b3b1a),-4.5+dx-0.3,3.0,8.8+(i?0.8:-0.8),scene);
+  });
+
+  /* alimentation 5 V */
+  box(4.2,2.4,2.8,M(0xf0f0ec,{roughness:0.5}),14,2.8,8.5,scene);
+  box(1.0,0.1,0.5,M(0x2a2a2a),14,4.05,8.5,scene);
+  var psuLbl=textPlane('5 V',2.2,0.9,'#222',90); psuLbl.position.set(14,4.04,8.5); scene.add(psuLbl);
+
+  /* câbles fixes */
+  tube([V(10.5,AX-0.5,1.8),V(10.8,8,3),V(8,2.2,5.5),V(2.5,4.9,6.5)],0xe8862a,0.07);
+  tube([V(10.5,AX-0.6,1.6),V(11.2,8,3.2),V(8.4,2.2,5.8),V(2.5,5.0,6.5)],0xd33333,0.07);
+  tube([V(10.5,AX-0.7,1.4),V(11.6,8,3.4),V(8.8,2.2,6.1),V(2.5,5.1,6.5)],0x7a4a2a,0.07);
+  tube([V(11.8,2.9,8.8),V(7,2.0,9.6),V(2.5,4.2,9.8),V(-1,3.2,9.2),V(-3.2,3.0,8.6)],0xcf3030,0.09);
+  tube([V(11.8,2.6,8.2),V(7,1.9,9.4),V(2.5,4.1,9.8),V(-1,3.0,9.0),V(-3.2,2.9,8.4)],0x222222,0.09);
+  tube([V(16,2.8,8.5),V(19,1.8,10),V(20.5,1.7,14.6)],0x202020,0.12);
+  tube([V(-16.2,3.4,6.9),V(-18,3.6,7.2),V(-21,2.0,9),V(-20,1.7,14.6)],0x777f86,0.13);
+  tube([V(-3,5.2,4),V(-3.2,4,6),V(-3.6,3.2,8)],0xe5c200,0.06);
+  tube([V(-3,5.2,4.3),V(-3.4,4,6.2),V(-3.9,3.2,8.2)],0x3fae6a,0.06);
+  tube([V(-11.5,2.9,8),V(-9,3.3,8.4),V(-6.2,3.2,8.1)],0xe0a020,0.05);
+  tube([V(-11.5,2.9,8.8),V(-9,3.4,9.0),V(-6.2,3.2,8.9)],0x1f9aa3,0.05);
+  tube([V(-11.5,2.9,9.4),V(-8,3.2,10.2),V(-5.5,3.1,9.7)],0xcf3030,0.05);
+
+  /* câbles des capteurs (dynamiques) */
+  function dyn(zs,color,fixed){
+    var w={mesh:new THREE.Mesh(new THREE.BufferGeometry(),new THREE.MeshStandardMaterial({color:color,roughness:0.55})),
+      local:[V(0.0,0.84,zs),V(-3.2,0.84,zs),V(-6.6,0.84,zs),V(-7.3,0.2,zs*0.6),V(-7.3,-0.9,zs*0.4)],fixed:fixed};
+    w.mesh.castShadow=true; scene.add(w.mesh); wires.push(w);
+  }
+  dyn(1.0,0xe5c200,[V(-7.4,AX-2.6,1.2),V(-6.5,7.5,2.4),V(-3.2,5.4,3.6),V(-3,5.2,4)]);
+  dyn(-1.0,0x3fae6a,[V(-7.4,AX-2.6,0.6),V(-6.6,7.4,2.2),V(-3.4,5.3,3.7),V(-3,5.2,4.3)]);
+  updateWires(true);
+
+  /* trajet du soleil, rayon, normale */
+  var pts=[]; for(var i=0;i<=60;i++){var p=i/60*Math.PI; pts.push(V(0,AX+Math.sin(p)*70,-Math.cos(p)*70))}
+  pathLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineDashedMaterial({color:0xf2b33d,dashSize:2.2,gapSize:2.2,transparent:true,opacity:0.8,fog:false}));
+  pathLine.computeLineDistances(); scene.add(pathLine);
+  rayLine=new THREE.Line(new THREE.BufferGeometry().setFromPoints([V(0,0,0),V(0,1,0)]),new THREE.LineBasicMaterial({color:0xffc83d,transparent:true,opacity:0.9,fog:false}));
+  rayLine.frustumCulled=false;
+  scene.add(rayLine);
+  normalArrow=new THREE.ArrowHelper(V(0,1,0),V(0,AX,0),9,0x00b7c2,1.6,0.9); scene.add(normalArrow);
+}
+
+function updateWires(force){
+  panelGroup.updateMatrixWorld(true);
+  wires.forEach(function(w){
+    var pts=w.local.map(function(p){return p.clone().applyMatrix4(panelGroup.matrixWorld)}).concat(w.fixed);
+    var g=new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),40,0.065,6,false);
+    w.mesh.geometry.dispose(); w.mesh.geometry=g;
+  });
+}
+
+function buildSun(){
+  sunMesh=new THREE.Mesh(new THREE.SphereGeometry(3.4,24,16),new THREE.MeshBasicMaterial({color:0xffd24a,fog:false}));
+  scene.add(sunMesh);
+  var gt=canvasTex(128,128,function(x,W,H){var g=x.createRadialGradient(W/2,H/2,2,W/2,H/2,W/2);g.addColorStop(0,'rgba(255,230,150,.95)');g.addColorStop(0.35,'rgba(255,200,90,.35)');g.addColorStop(1,'rgba(255,200,90,0)');x.fillStyle=g;x.fillRect(0,0,W,H)});
+  sunGlow=new THREE.Sprite(new THREE.SpriteMaterial({map:gt,blending:THREE.AdditiveBlending,depthWrite:false,transparent:true,fog:false}));
+  sunGlow.scale.set(30,30,1); scene.add(sunGlow);
+}
+
+function buildRain(){
+  rainPos=new Float32Array(rainN*6);
+  for(var i=0;i<rainN;i++){
+    var x=(Math.random()-0.5)*120,z=(Math.random()-0.5)*100,y=Math.random()*60;
+    rainPos.set([x,y,z,x,y+2.4,z],i*6);
+  }
+  var g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(rainPos,3));
+  rain=new THREE.LineSegments(g,new THREE.LineBasicMaterial({color:0xbcd6f0,transparent:true,opacity:0.6}));
+  rain.frustumCulled=false; rain.visible=false; scene.add(rain);
+}
+function stepRain(dt){
+  var sl=S.wind*0.22*dt;
+  for(var i=0;i<rainN;i++){
+    var o=i*6, d=68*dt;
+    rainPos[o+1]-=d; rainPos[o+4]-=d; rainPos[o]+=sl; rainPos[o+3]+=sl;
+    if(rainPos[o+1]<1.7){
+      var x=(Math.random()-0.5)*120,z=(Math.random()-0.5)*100;
+      rainPos[o]=x;rainPos[o+1]=60;rainPos[o+2]=z;rainPos[o+3]=x+S.wind*0.03;rainPos[o+4]=62.4;rainPos[o+5]=z;
+    }
+  }
+  rain.geometry.attributes.position.needsUpdate=true;
+}
+
+/* ---------- étiquettes ---------- */
+function buildLabels(){
+  var host=$('tags');
+  function L(id,text,fn){labelDefs.push({id:id,text:text,fn:fn})}
+  var tmp=new THREE.Vector3();
+  L('panneau','Panneau solaire',function(v){return panelGroup.localToWorld(v.set(5.2,1.0,4.2))});
+  L('haut','Capteur haut (A0)',function(v){return panelGroup.localToWorld(v.set(0.3,0.95,1.0))});
+  L('bas','Capteur bas (A1)',function(v){return panelGroup.localToWorld(v.set(-0.3,0.95,-1.0))});
+  L('cloison','Cloison',function(v){return panelGroup.localToWorld(v.set(1.4,0.81+S.fin,0))});
+  L('axe','Axe',function(v){return panelGroup.localToWorld(v.set(-9.0,0,0))});
+  L('servo',"Servomoteur",function(v){return v.set(9.8,AX+0.9,0.6)});
+  L('montants','Montants et base',function(v){return v.set(-8.3,3.2,1.6)});
+  L('boitier','Boîtier étanche',function(v){return v.set(-8,7.8,8.5)});
+  L('arduino','Arduino UNO',function(v){return v.set(-13.5,3.1,8.5)});
+  L('plaque','Plaque d’essai + résistances',function(v){return v.set(-4.5,3.2,10.6)});
+  L('alim','Alimentation 5 V',function(v){return v.set(14,4.3,8.5)});
+  L('cables','Câbles capteurs',function(v){return v.set(-6.2,7.2,2.4)});
+  labelDefs.forEach(function(l){
+    var b=document.createElement('button'); b.type='button'; b.className='tag'; b.textContent=l.text; b.setAttribute('aria-pressed','false');
+    b.addEventListener('click',function(){select(l.id)});
+    host.appendChild(b); l.el=b; l.v=new THREE.Vector3();
+  });
+}
+function select(id){
+  S.sel=(S.sel===id)?null:id;
+  var p=S.sel?PARTS[S.sel]:DEFAULT_INFO;
+  $('infoT').textContent=p.t; $('infoD').textContent=p.d;
+  labelDefs.forEach(function(l){l.el.setAttribute('aria-pressed',String(l.id===S.sel))});
+}
+function placeLabels(){
+  var host=$('tags'), W=host.clientWidth, H=host.clientHeight;
+  labelDefs.forEach(function(l){
+    if(!S.tags){l.el.style.display='none';return}
+    l.fn(l.v); l.v.project(camera);
+    var vis=l.v.z<1&&l.v.z>-1;
+    if(!vis){l.el.style.display='none';return}
+    l.el.style.display='flex';
+    var x=(l.v.x*0.5+0.5)*W+10, y=(-l.v.y*0.5+0.5)*H-10;
+    l.el.style.transform='translate('+Math.round(clamp(x,2,W-l.el.offsetWidth-2))+'px,'+Math.round(clamp(y,2,H-24))+'px)';
+  });
+}
+
+/* ---------- mise à jour de la scène ---------- */
+function updateScene(){
+  var phi=sunPhi(), sp=Math.sin(phi), dir=V(0,sp,-Math.cos(phi)), w=WX[S.weather], L=daylight();
+  var R=70;
+  sunMesh.position.set(0,AX+dir.y*R,dir.z*R); sunGlow.position.copy(sunMesh.position);
+  var up=sp>0.01; sunMesh.visible=up&&S.weather==='clair'; sunGlow.visible=up&&S.weather!=='pluie';
+  sunGlow.material.opacity=S.weather==='clair'?1:0.35;
+  sunLight.position.set(0,AX+dir.y*80,dir.z*80);
+  sunLight.intensity=up?2.0*L*w.dr+0.1:0;
+  sunLight.color.set(0xff9b5a).lerp(new THREE.Color(0xfff3de),clamp(sp/0.45,0,1));
+  hemi.intensity=0.28+0.62*L*(1-w.sky*0.3)+(S.weather==='clair'?0:0.15);
+  /* ciel */
+  var night=new THREE.Color('#0a1020'),day=new THREE.Color('#a9d0ee'),dusk=new THREE.Color('#f0a868'),grey=new THREE.Color('#98a2aa');
+  var k=clamp((sp+0.12)/0.4,0,1), c=night.clone().lerp(day,k);
+  c.lerp(dusk,clamp(1-Math.abs(sp-0.06)/0.22,0,1)*0.55*(w.sky>0?0.4:1));
+  c.lerp(grey,w.sky*k);
+  scene.background.copy(c); scene.fog.color.copy(c);
+  tableMesh.material.color.set(0xb7a68a).multiplyScalar(0.35+0.65*Math.max(L,0.15));
+  $('viewport').style.background='#'+c.getHexString();
+  /* panneau */
+  var jitter=(S.wind>40&&S.angle!==90)?Math.sin(performance.now()*0.05)*(S.wind-35)/45*0.012:0;
+  panelGroup.rotation.x=(S.angle-90)*RAD+jitter;
+  if(S.angle!==S.lastAngle){updateWires();S.lastAngle=S.angle}
+  var psi=S.angle*RAD, n=V(0,Math.sin(psi),-Math.cos(psi));
+  normalArrow.position.set(0,AX,0).addScaledVector(n,1.0);
+  normalArrow.setDirection(n);
+  normalArrow.visible=S.rays;
+  var tip=V(0,AX+0.9,0);
+  var ra=rayLine.geometry.attributes.position.array; ra[0]=tip.x;ra[1]=tip.y;ra[2]=tip.z;ra[3]=sunMesh.position.x;ra[4]=sunMesh.position.y;ra[5]=sunMesh.position.z;
+  rayLine.geometry.attributes.position.needsUpdate=true;
+  rayLine.visible=S.rays&&up;
+  pathLine.visible=S.path;
+  finMesh.scale.y=S.fin;
+  rain.visible=S.weather==='pluie';
+  controls.update();
+}
+
+/* ---------- interface ---------- */
+function setupGauge(){
+  function pt(a,r){return [100-r*Math.cos(a*RAD),100-r*Math.sin(a*RAD)]}
+  var p1=pt(10,80),p2=pt(170,80);
+  $('gOk').setAttribute('d','M'+p1[0].toFixed(1)+' '+p1[1].toFixed(1)+' A80 80 0 0 1 '+p2[0].toFixed(1)+' '+p2[1].toFixed(1));
+  var ns='http://www.w3.org/2000/svg', g=$('gTicks');
+  for(var a=0;a<=180;a+=30){
+    var i=pt(a,68),o=pt(a,88),l=document.createElementNS(ns,'line');
+    l.setAttribute('x1',i[0]);l.setAttribute('y1',i[1]);l.setAttribute('x2',o[0]);l.setAttribute('y2',o[1]);
+    l.setAttribute('stroke','var(--muted)');l.setAttribute('stroke-width','1.5'); g.appendChild(l);
+  }
+}
+var STATUS={
+  plus:["Plus de lumière en haut : le servomoteur tourne (+1°)",true],
+  moins:["Plus de lumière en bas : le servomoteur tourne (−1°)",true],
+  ok:["Panneau bien aligné : dans la zone morte, il ne bouge pas",false],
+  nuit:["Presque pas de lumière : le panneau revient à plat (90°)",false],
+  vent:["Vent fort : retour à plat par sécurité (option)",false]
+};
+function updateHUD(){
+  var phi=sunPhi(), sunDeg=phi/RAD, hh=Math.floor(S.t), mm=Math.floor((S.t-hh)*60);
+  var clock=pad(hh%24)+':'+pad(mm%60);
+  $('clock').textContent=clock; $('chipTime').textContent=clock;
+  var elev=Math.sin(phi)>0?Math.round(Math.asin(Math.sin(phi))/RAD):0;
+  $('chipSun').textContent=Math.sin(phi)>0.01?('Soleil à '+elev+'° de hauteur'):'Soleil couché';
+  $('chipWx').textContent=WX[S.weather].label;
+  $('time').value=S.t;
+  $('vAngle').textContent=S.angle+'°';
+  var sunOnArc=sunDeg>=0&&sunDeg<=180;
+  $('vSun').textContent=sunOnArc?Math.round(sunDeg)+'°':'sous l’horizon';
+  $('gNeedle').setAttribute('x2',(100-68*Math.cos(S.angle*RAD)).toFixed(1)); $('gNeedle').setAttribute('y2',(100-68*Math.sin(S.angle*RAD)).toFixed(1));
+  var sd=clamp(sunDeg,0,180); $('gSun').setAttribute('cx',(100-80*Math.cos(sd*RAD)).toFixed(1)); $('gSun').setAttribute('cy',(100-80*Math.sin(sd*RAD)).toFixed(1));
+  $('gSun').style.display=sunOnArc?'':'none';
+  $('vTop').textContent=S.top; $('vBot').textContent=S.bot;
+  $('bTop').style.width=(S.top/1023*100)+'%'; $('bBot').style.width=(S.bot/1023*100)+'%';
+  var diff=S.top-S.bot; $('vDiff').textContent=(diff>0?'+':'')+diff;
+  $('zone').style.left=((400-S.tol)/800*100)+'%'; $('zone').style.width=(2*S.tol/800*100)+'%';
+  $('need').style.left=((clamp(diff,-400,400)+400)/800*100)+'%';
+  var st=STATUS[S.act]; $('status').textContent=st[0]; $('status').className='status'+(st[1]?' move':'');
+  var err=(phi-S.angle*RAD)/RAD, up=Math.sin(phi)>0.01;
+  $('vErr').textContent=up?((err>0?'+':'')+fmt1(err)+'°'):'–';
+  var wx=WX[S.weather], eff=(wx.dr*Math.max(0,Math.cos(phi-S.angle*RAD))+wx.df*0.5)/(wx.dr+wx.df*0.5);
+  $('vEff').textContent=up?Math.round(eff*100)+' %':'–';
+  /* journée */
+  var mx=Math.max(S.eT,S.eF,0.0001);
+  $('vET').textContent=fmt1(S.eT); $('vEF').textContent=fmt1(S.eF);
+  $('bET').style.width=(S.eT/Math.max(mx,0.0001)*100)+'%'; $('bEF').style.width=(S.eF/Math.max(mx,0.0001)*100)+'%';
+  $('vGain').textContent=S.eF>0.05?('+'+Math.round((S.eT/S.eF-1)*100)+' %'):'–';
+  /* code */
+  var on={};
+  [14,15,16,28,29,30].forEach(function(n){on[n]=1});
+  if(S.act==='nuit'||S.act==='vent'){on[18]=1; on[S.angle<90?19:20]=1}
+  else if(S.act==='plus'){on[22]=1;on[23]=1}
+  else if(S.act==='moins'){on[24]=1;on[25]=1}
+  else on[26]=1;
+  var ls=codeEls; for(var i=0;i<ls.length;i++){ls[i].classList.toggle('on',!!on[i])}
+}
+/* le gain affiché compare l'énergie du jour : intégrée dans frame() */
+
+var CODE=[
+'#include <Servo.h>',
+'',
+'Servo servo;',
+'const int LDR_HAUT = A0;',
+'const int LDR_BAS  = A1;',
+'const int ZONE_MORTE = 40;     // tolérance',
+'int angle = 90;                // 90 = panneau à plat',
+'',
+'void setup() {',
+'  servo.attach(9);',
+'  servo.write(angle);',
+'}',
+'',
+'void loop() {',
+'  int haut = analogRead(LDR_HAUT);',
+'  int bas  = analogRead(LDR_BAS);',
+'  int diff = haut - bas;',
+'',
+'  if (haut + bas < 100) {            // nuit : retour à plat',
+'    if (angle < 90) angle++;',
+'    else if (angle > 90) angle--;',
+'  }',
+'  else if (diff > ZONE_MORTE) {      // plus de lumière en haut',
+'    angle++;',
+'  } else if (diff < -ZONE_MORTE) {   // plus de lumière en bas',
+'    angle--;',
+'  }                                  // sinon : bien aligné, on ne bouge pas',
+'',
+'  angle = constrain(angle, 10, 170); // butées',
+'  servo.write(angle);',
+'  delay(30);',
+'}'];
+var codeEls=[];
+function buildCode(){
+  var pre=$('code'); pre.textContent='';
+  CODE.forEach(function(line,i){
+    var s=document.createElement('span'); s.className='l';
+    var txt=line.replace('= 40;','= '+S.tol+';');
+    var k=txt.indexOf('//');
+    if(k>=0){s.appendChild(document.createTextNode(txt.slice(0,k)));var c=document.createElement('span');c.className='c';c.textContent=txt.slice(k);s.appendChild(c)}
+    else s.textContent=txt||' ';
+    pre.appendChild(s); codeEls.push(s);
+  });
+}
+function updateCodeTol(){ // met à jour la ligne 5
+  var s=codeEls[5]; if(!s)return; s.textContent='';
+  var t='const int ZONE_MORTE = '+S.tol+';     ';
+  s.appendChild(document.createTextNode(t)); var c=document.createElement('span'); c.className='c'; c.textContent='// tolérance'; s.appendChild(c);
+}
+
+function resetEnergy(){S.eT=0;S.eF=0}
+
+var camPresets={
+  iso:{p:[40,25,50],t:[-1,9,3]}, cote:{p:[-72,13,0.01],t:[0,11,0]}, face:{p:[0.01,15,72],t:[0,10,0]}, dessus:{p:[0.01,85,0.01],t:[0,2,2]}
+};
+function setCam(k){
+  if(!renderer)return; var c=camPresets[k];
+  camera.position.set(c.p[0],c.p[1],c.p[2]); controls.target.set(c.t[0],c.t[1],c.t[2]); controls.update();
+}
+
+function resize(){
+  if(!renderer)return;
+  var vp=$('viewport'), w=vp.clientWidth, h=vp.clientHeight;
+  if(!w||!h)return;
+  renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix();
+}
+
+function wire(){
+  $('play').addEventListener('click',function(){S.playing=!S.playing;$('play').textContent=S.playing?'Pause':'Lecture';$('play').setAttribute('aria-pressed',String(S.playing))});
+  $('time').addEventListener('input',function(){S.t=parseFloat(this.value)});
+  $('speed').addEventListener('change',function(){S.speed=parseFloat(this.value)});
+  $('weather').addEventListener('change',function(){S.weather=this.value});
+  $('shade').addEventListener('change',function(){S.shade=this.value});
+  $('tol').addEventListener('input',function(){S.tol=parseInt(this.value,10);$('tolV').textContent=S.tol;updateCodeTol()});
+  $('fin').addEventListener('input',function(){S.fin=parseFloat(this.value);$('finV').textContent=fmt1(S.fin)+' cm'});
+  $('wind').addEventListener('input',function(){S.wind=parseInt(this.value,10);$('windV').textContent=S.wind+' km/h'});
+  $('windSafe').addEventListener('change',function(){S.windSafe=this.checked});
+  $('optTags').addEventListener('change',function(){S.tags=this.checked});
+  $('optRays').addEventListener('change',function(){S.rays=this.checked});
+  $('optPath').addEventListener('change',function(){S.path=this.checked});
+  $('resetE').addEventListener('click',resetEnergy);
+  Array.prototype.forEach.call(document.querySelectorAll('[data-cam]'),function(b){b.addEventListener('click',function(){setCam(b.getAttribute('data-cam'))})});
+  var tabs=[1,2,3];
+  tabs.forEach(function(n){$('tab'+n).addEventListener('click',function(){
+    tabs.forEach(function(m){$('tab'+m).setAttribute('aria-selected',String(m===n));$('p'+m).hidden=(m!==n)});
+  })});
+  if(typeof ResizeObserver!=='undefined'){new ResizeObserver(resize).observe($('viewport'))}
+  window.addEventListener('resize',resize);
+  if(!S.playing){$('play').textContent='Lecture';$('play').setAttribute('aria-pressed','false')}
+}
+
+var last=0;
+function frame(now){
+  var dt=Math.min(0.1,(now-last)/1000||0.016); last=now;
+  if(S.playing){
+    var dh=dt*0.5*S.speed; S.t+=dh;
+    if(S.t>=24){S.t-=24;resetEnergy()}
+    S.eT+=power(S.angle)*dh; S.eF+=power(90)*dh;
+  }
+  S.acc+=dt; var n=0;
+  while(S.acc>=0.03&&n<12){tick();S.acc-=0.03;n++}
+  if(S.acc>0.4)S.acc=0;
+  if(renderer){
+    if(S.weather==='pluie')stepRain(dt);
+    updateScene(); placeLabels(); renderer.render(scene,camera);
+  }
+  S.hudT-=dt; if(S.hudT<=0){updateHUD();S.hudT=0.1}
+  requestAnimationFrame(frame);
+}
+
+function start(){
+  buildCode(); setupGauge(); wire();
+  init3D();
+  /* état de départ réaliste : le panneau est déjà aligné sur le soleil de 9 h 30 */
+  for(var i=0;i<400;i++)tick();
+  S.eT=0;S.eF=0;
+  $('windV').textContent=S.wind+' km/h'; $('finV').textContent=fmt1(S.fin)+' cm';
+  updateHUD();
+  if(renderer){updateWires(true)}
+  requestAnimationFrame(frame);
+}
+start();
+})();
+</script>
+</body>
+</html>
